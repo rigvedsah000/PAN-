@@ -20,7 +20,7 @@ np.random.seed(123456)
 random.seed(123456)
 
 
-def train(train_loader, model, optimizer, epoch, start_iter, cfg):
+def train(train_loader, model, optimizer, epoch, start_iter, cfg, log_file):
     model.train()
 
     # meters
@@ -104,7 +104,7 @@ def train(train_loader, model, optimizer, epoch, start_iter, cfg):
         start = time.time()
 
         # print log
-        if iter % 20 == 0:
+        if (iter + 1) % cfg.train_cfg.print_batch_step == 0:
             length = len(train_loader)
             log = f'({iter + 1}/{length}) ' \
                   f'LR: {optimizer.param_groups[0]["lr"]:.6f} | ' \
@@ -119,7 +119,10 @@ def train(train_loader, model, optimizer, epoch, start_iter, cfg):
                   f'IoU(text/kernel): {ious_text.avg:.3f}/{ious_kernel.avg:.3f}' \
                   f'{" | ACC rec: " + format(accs_rec.avg, ".3f") if with_rec else ""}'
             print(log)
+            log_file.write('\n' + log)
+
             sys.stdout.flush()
+            log_file.flush()
 
 
 def adjust_learning_rate(optimizer, dataloader, epoch, iter, cfg):
@@ -141,41 +144,54 @@ def adjust_learning_rate(optimizer, dataloader, epoch, iter, cfg):
         param_group['lr'] = lr
 
 
-def save_checkpoint(state, checkpoint_path, cfg):
-    file_path = osp.join(checkpoint_path, 'checkpoint.pth.tar')
+def save_checkpoint(state, output_path, cfg, log_file):
+    file_path = osp.join(output_path, 'checkpoint.pth.tar')
     torch.save(state, file_path)
 
     if cfg.data.train.type in ['synth'] or \
             (state['iter'] == 0 and
-             state['epoch'] > cfg.train_cfg.epoch - 100 and
-             state['epoch'] % 10 == 0):
+             state['epoch'] % args.train_cfg.save_epoch_step == 0):
         file_name = 'checkpoint_%dep.pth.tar' % state['epoch']
-        file_path = osp.join(checkpoint_path, file_name)
+        file_path = osp.join(output_path, file_name)
         torch.save(state, file_path)
+
+        log_file.write(f'Saved checkpoint {file_name}')
+        log_file.flush()
 
 
 def main(args):
     cfg = Config.fromfile(args.config)
+
+    if not os.path.exists(cfg.save_model_dir):
+        os.makedirs(cfg.save_model_dir)
+
+    if args.resume:
+        log_file = open(os.path.join(cfg.save_model_dir, 'train.log'), 'a', encoding='utf8')
+    else:
+        log_file = open(os.path.join(cfg.save_model_dir, 'train.log'), 'w', encoding='utf8')
+
     print(json.dumps(cfg._cfg_dict, indent=4))
+    log_file.write(json.dumps(cfg._cfg_dict, indent=4))
+    log_file.flush()
 
     if args.checkpoint is not None:
         checkpoint_path = args.checkpoint
     else:
-        cfg_name, _ = osp.splitext(osp.basename(args.config))
-        checkpoint_path = osp.join('checkpoints', cfg_name)
-    if not osp.isdir(checkpoint_path):
-        os.makedirs(checkpoint_path)
+        output_path = cfg.save_model_dir
+
     print('Checkpoint path: %s.' % checkpoint_path)
+    log_file.write('\nCheckpoint path: %s.' % output_path)
     sys.stdout.flush()
+    log_file.flush()
 
     # data loader
     data_loader = build_data_loader(cfg.data.train)
     train_loader = torch.utils.data.DataLoader(data_loader,
                                                batch_size=cfg.data.batch_size,
-                                               shuffle=True,
-                                               num_workers=8,
-                                               drop_last=True,
-                                               pin_memory=True)
+                                               shuffle=cfg.data.train.shuffle,
+                                               num_workers=cfg.data.train.num_workers,
+                                               drop_last=cfg.data.train.drop_last,
+                                               pin_memory=cfg.data.train.pin_memory)
 
     # model
     if hasattr(cfg.model, 'recognition_head'):
@@ -199,7 +215,8 @@ def main(args):
                                         weight_decay=5e-4)
         elif cfg.train_cfg.optimizer == 'Adam':
             optimizer = torch.optim.Adam(model.parameters(),
-                                         lr=cfg.train_cfg.lr)
+                                         lr=cfg.train_cfg.lr,
+                                         weight_decay=cfg.train_cfg.weight_decay)
 
     start_epoch = 0
     start_iter = 0
@@ -207,11 +224,15 @@ def main(args):
         assert osp.isfile(
             cfg.train_cfg.pretrain), 'Error: no pretrained weights found!'
         print('Finetuning from pretrained model %s.' % cfg.train_cfg.pretrain)
+        log_file.write('\nFinetuning from pretrained model %s.' % cfg.train_cfg.pretrain)
+        log_file.flush()
         checkpoint = torch.load(cfg.train_cfg.pretrain)
         model.load_state_dict(checkpoint['state_dict'])
     if args.resume:
         assert osp.isfile(args.resume), 'Error: no checkpoint directory found!'
         print('Resuming from checkpoint %s.' % args.resume)
+        log_file.write('\nResuming from checkpoint %s.' % args.resume)
+        log_file.flush()
         checkpoint = torch.load(args.resume)
         start_epoch = checkpoint['epoch']
         start_iter = checkpoint['iter']
@@ -220,14 +241,18 @@ def main(args):
 
     for epoch in range(start_epoch, cfg.train_cfg.epoch):
         print('\nEpoch: [%d | %d]' % (epoch + 1, cfg.train_cfg.epoch))
+        log_file.write('\nEpoch: [%d | %d]' % (epoch + 1, cfg.train_cfg.epoch))
+        log_file.flush()
 
-        train(train_loader, model, optimizer, epoch, start_iter, cfg)
+        train(train_loader, model, optimizer, epoch, start_iter, cfg, log_file)
 
         state = dict(epoch=epoch + 1,
                      iter=0,
                      state_dict=model.state_dict(),
                      optimizer=optimizer.state_dict())
-        save_checkpoint(state, checkpoint_path, cfg)
+        save_checkpoint(state, checkpoint_path, cfg, log_file)
+
+    log_file.close()
 
 
 if __name__ == '__main__':
