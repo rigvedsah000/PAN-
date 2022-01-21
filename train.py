@@ -150,48 +150,48 @@ def save_checkpoint(state, output_path, cfg, log_file):
 
     if cfg.data.train.type in ['synth'] or \
             (state['iter'] == 0 and
-             state['epoch'] % args.train_cfg.save_epoch_step == 0):
+             state['epoch'] % cfg.train_cfg.save_epoch_step == 0):
         file_name = 'checkpoint_%dep.pth.tar' % state['epoch']
         file_path = osp.join(output_path, file_name)
         torch.save(state, file_path)
 
-        log_file.write(f'Saved checkpoint {file_name}')
+        print(f"Saving checkpoint {file_name}")
+        log_file.write(f'\nSaved checkpoint {file_name}')
         log_file.flush()
 
 
 def main(args):
     cfg = Config.fromfile(args.config)
 
-    if not os.path.exists(cfg.save_model_dir):
-        os.makedirs(cfg.save_model_dir)
+    if args.checkpoint is not None:
+        output_path = args.checkpoint
+    else:
+        output_path = cfg.train_cfg.save_model_dir
+
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
 
     if args.resume:
-        log_file = open(os.path.join(cfg.save_model_dir, 'train.log'), 'a', encoding='utf8')
+        log_file = open(os.path.join(output_path, 'train.log'), 'a', encoding='utf8')
     else:
-        log_file = open(os.path.join(cfg.save_model_dir, 'train.log'), 'w', encoding='utf8')
+        log_file = open(os.path.join(output_path, 'train.log'), 'w', encoding='utf8')
 
     print(json.dumps(cfg._cfg_dict, indent=4))
     log_file.write(json.dumps(cfg._cfg_dict, indent=4))
     log_file.flush()
 
-    if args.checkpoint is not None:
-        checkpoint_path = args.checkpoint
-    else:
-        output_path = cfg.save_model_dir
-
-    print('Checkpoint path: %s.' % checkpoint_path)
-    log_file.write('\nCheckpoint path: %s.' % output_path)
+    print('Checkpoint path: %s' % output_path)
+    log_file.write('\nCheckpoint path: %s' % output_path)
     sys.stdout.flush()
     log_file.flush()
 
     # data loader
     data_loader = build_data_loader(cfg.data.train)
     train_loader = torch.utils.data.DataLoader(data_loader,
-                                               batch_size=cfg.data.batch_size,
+                                               batch_size=cfg.data.train.batch_size,
                                                shuffle=cfg.data.train.shuffle,
                                                num_workers=cfg.data.train.num_workers,
-                                               drop_last=cfg.data.train.drop_last,
-                                               pin_memory=cfg.data.train.pin_memory)
+                                               drop_last=cfg.data.train.drop_last)
 
     # model
     if hasattr(cfg.model, 'recognition_head'):
@@ -250,7 +250,7 @@ def main(args):
                      iter=0,
                      state_dict=model.state_dict(),
                      optimizer=optimizer.state_dict())
-        save_checkpoint(state, checkpoint_path, cfg, log_file)
+        save_checkpoint(state, output_path, cfg, log_file)
 
     log_file.close()
 

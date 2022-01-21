@@ -49,7 +49,7 @@ class ResultFormat(object):
                     values) + ',%s\n' % words[i]
                 lines.append(line)
 
-        file_name = 'res_%s.txt' % img_name
+        file_name = '%s.txt' % img_name
         file_path = osp.join(tmp_folder, file_name)
         with open(file_path, 'w') as f:
             for line in lines:
@@ -99,7 +99,7 @@ class ResultFormat(object):
 
     def _write_result_msra(self, image_name, outputs):
         bboxes = outputs['bboxes']
-    
+
         lines = []
         for b_idx, bbox in enumerate(bboxes):
             values = [int(v) for v in bbox]
@@ -108,9 +108,27 @@ class ResultFormat(object):
                 line += ', %d' % values[v_id]
             line += '\n'
             lines.append(line)
-    
+
         file_name = '%s.txt' % image_name
         file_path = osp.join(self.result_path, file_name)
         with open(file_path, 'w') as f:
             for line in lines:
                 f.write(line)
+
+    def draw_bb(self, outputs, img, img_name, save_path):
+        bboxes = outputs['bboxes']
+        import cv2
+        import numpy as np
+        src_im = cv2.imread(os.path.join(img, img_name))
+        for b_idx, bbox in enumerate(bboxes):
+            values = [int(v) for v in bbox]
+            box = np.reshape(values, (int(len(values)/2), 2))
+            box = box.astype(np.int32).reshape((-1, 1, 2))
+            cv2.polylines(src_im, [box], True, color=(255, 255, 0), thickness=2)
+
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+        save_path = os.path.join(save_path, os.path.basename(img_name))
+        cv2.imwrite(save_path, src_im)
+        print("The detected Image saved in {}".format(save_path))

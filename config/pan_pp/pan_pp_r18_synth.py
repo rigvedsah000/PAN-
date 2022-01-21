@@ -31,7 +31,6 @@ model = dict(
     )
 )
 data = dict(
-    batch_size=16,
     train=dict(
         type='PAN_PP_IC15',
         split='train',
@@ -45,7 +44,9 @@ data = dict(
         batch_size=16,
         num_workers=8,
         shuffle=True,
-        drop_last=False
+        drop_last=False,
+        img_dir='/home/ocr/program/PAN++/devanagari/output/',
+        ann_dir='/home/ocr/program/PAN++/devanagari/gt_ic/'
     ),
     test=dict(
         type='PAN_PP_IC15',
@@ -57,7 +58,9 @@ data = dict(
         batch_size=1,   # must be 8
         num_workers=8,
         shuffle=False,
-        drop_last=False
+        drop_last=False,
+        img_dir='/home/ocr/program/PAN++/devanagari/output/',
+        ann_dir='/home/ocr/program/PAN++/devanagari/gt_ic.txt'
     )
 )
 train_cfg = dict(
@@ -67,9 +70,9 @@ train_cfg = dict(
     use_ex=False,
 
     weight_decay=0,
-    epoch=600,
-    print_batch_step=100,
-    save_epoch_step=1,
+    epoch=50,
+    print_batch_step=5,
+    save_epoch_step=10,
     eval_batch_step=[0, 15000],
     save_model_dir='./output/pan_pp_r18_hi/'
     # pretrain
@@ -80,7 +83,8 @@ test_cfg = dict(
     min_kernel_area=2.6,
     scale=4,
     bbox_type='rect',
-    result_path='outputs/submit_ic15.zip',
+    result_path='./output/pan_pp_r18_hi/preds.zip',
 
-    save_res_path='./output/det_pp_pp_hi/',
+    infer_det=False,
+    save_res_path='./output/det_pan_pp_hi/',
 )

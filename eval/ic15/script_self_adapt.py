@@ -10,23 +10,25 @@ args = parser.parse_args()
 output_root = '../outputs/tmp_results/'
 pred = mmcv.load(args.pred)
 
+
 def write_result_as_txt(image_name, bboxes, path, words=None):
     if not os.path.exists(path):
         os.makedirs(path)
 
-    file_path = path + 'res_%s.txt'%(image_name)
+    file_path = path + 'res_%s.txt' % (image_name)
     lines = []
     for i, bbox in enumerate(bboxes):
         values = [int(v) for v in bbox]
         if words is None:
-            line = "%d,%d,%d,%d,%d,%d,%d,%d\n"%tuple(values)
+            line = "%d,%d,%d,%d,%d,%d,%d,%d\n" % tuple(values)
             lines.append(line)
         elif words[i] is not None:
-            line = "%d,%d,%d,%d,%d,%d,%d,%d"%tuple(values) + ",%s\n"%words[i]
+            line = "%d,%d,%d,%d,%d,%d,%d,%d" % tuple(values) + ",%s\n" % words[i]
             lines.append(line)
     with open(file_path, 'w') as f:
         for line in lines:
             f.write(line)
+
 
 def eval(thr):
     for key in pred:
@@ -52,6 +54,7 @@ def eval(thr):
     h_mean = float(res_cmd.split(',')[-2].split(':')[-1])
     return res_cmd, h_mean
 
+
 max_h_mean = 0
 best_thr = 0
 best_res = ''
@@ -65,4 +68,4 @@ for i in range(85, 100):
         best_thr = thr
         best_res = res
 
-print('thr: %f | %s'%(best_thr, best_res))
+print('thr: %f | %s' % (best_thr, best_res))

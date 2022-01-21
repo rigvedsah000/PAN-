@@ -73,7 +73,8 @@ def test(test_loader, model, cfg):
                             total_time=AverageMeter(500))
 
     for idx, data in enumerate(test_loader):
-        print('Testing %d/%d\r' % (idx, len(test_loader)), flush=True, end='')
+        if (idx + 1) % 1000 == 0:
+            print('Testing %d/%d\r' % (idx, len(test_loader)), flush=True)
     
         # prepare input
         data['imgs'] = data['imgs'].cuda()
@@ -94,6 +95,9 @@ def test(test_loader, model, cfg):
             osp.basename(test_loader.dataset.img_paths[idx]))
         rf.write_result(image_name, outputs)
 
+        if cfg.test_cfg.infer_det:
+            rf.draw_bb(outputs, cfg.data.test.img_dir, osp.basename(test_loader.dataset.img_paths[idx]), cfg.test_cfg.save_res_path)
+
 
 def main(args):
     cfg = Config.fromfile(args.config)
@@ -106,9 +110,9 @@ def main(args):
     data_loader = build_data_loader(cfg.data.test)
     test_loader = torch.utils.data.DataLoader(
         data_loader,
-        batch_size=1,
-        shuffle=False,
-        num_workers=2,
+        batch_size=cfg.data.test.batch_size,
+        shuffle=cfg.data.test.shuffle,
+        num_workers=cfg.data.test.num_workers,
     )
     # model
     if hasattr(cfg.model, 'recognition_head'):

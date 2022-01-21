@@ -12,13 +12,6 @@ import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils import data
 
-root_dir = './data/ICDAR2015/Challenge4/'
-train_data_dir = root_dir + 'ch4_training_images/'
-train_gt_dir = root_dir + 'ch4_training_localization_transcription_gt/'
-test_data_dir = root_dir + 'ch4_test_images/'
-test_gt_dir = root_dir + 'ch4_test_localization_transcription_gt/'
-
-
 def get_img(img_path, read_type='pil'):
     try:
         if read_type == 'cv2':
@@ -256,7 +249,14 @@ class PAN_PP_IC15(data.Dataset):
                  kernel_scale=0.5,
                  with_rec=False,
                  read_type='pil',
-                 report_speed=False):
+                 report_speed=False,
+                 batch_size=16,
+                 num_workers=8,
+                 shuffle=True,
+                 drop_last=False,
+                 img_dir='',
+                 ann_dir=''):
+
         self.split = split
         self.is_transform = is_transform
 
@@ -269,11 +269,11 @@ class PAN_PP_IC15(data.Dataset):
         self.read_type = read_type
 
         if split == 'train':
-            data_dirs = [train_data_dir]
-            gt_dirs = [train_gt_dir]
+            data_dirs = [img_dir]
+            gt_dirs = [ann_dir]
         elif split == 'test':
-            data_dirs = [test_data_dir]
-            gt_dirs = [test_gt_dir]
+            data_dirs = [img_dir]
+            gt_dirs = [ann_dir]
         else:
             print('Error: split must be train or test!')
             raise

@@ -3,7 +3,7 @@
 import json
 import sys
 
-sys.path.append('./')
+sys.path.append('../../eval/synth/')
 import zipfile
 import re
 import sys
@@ -53,22 +53,25 @@ def load_zip_file(file, fileNameRegExp='', allEntries=False):
     """
     try:
         archive = zipfile.ZipFile(file, mode='r', allowZip64=True)
-    except:
+    except Exception as e:
         raise Exception('Error loading the ZIP archive')
 
     pairs = []
     for name in archive.namelist():
-        print(name)
+        # print(name)
         addFile = True
-        keyName = name
-        if fileNameRegExp != "":
-            m = re.match(fileNameRegExp, name)
-            if m == None:
-                addFile = False
-            else:
-                if len(m.groups()) > 0:
-                    keyName = m.group(1)
+        keyName = '/'.join(name.split('/')[1:])
 
+        print(keyName)
+        # if fileNameRegExp != "":
+        #     m = re.match(fileNameRegExp, name)
+        #     if m == None:
+        #         addFile = False
+        #     else:
+        #         if len(m.groups()) > 0:
+        #             keyName = m.group(1)
+
+        # print(addFile)
         if addFile:
             pairs.append([keyName, archive.read(name)])
         else:
@@ -309,61 +312,61 @@ def main_evaluation(p, default_evaluation_params_fn, validate_data_fn, evaluate_
     evaluate_method_fn: points to a function that evaluated the submission and return a Dictionary with the results
     """
 
-    if (p == None):
+    if p is None:
         p = dict([s[1:].split('=') for s in sys.argv[1:]])
         if len(sys.argv) < 3:
             print_help()
 
-    evalParams = default_evaluation_params_fn()
+    eval_params = default_evaluation_params_fn()
     if 'p' in p.keys():
-        evalParams.update(p['p'] if isinstance(p['p'], dict) else json.loads(p['p'][1:-1]))
+        eval_params.update(p['p'] if isinstance(p['p'], dict) else json.loads(p['p'][1:-1]))
 
-    resDict = {'calculated': True, 'Message': '', 'method': '{}', 'per_sample': '{}'}
+    res_dict = {'calculated': True, 'Message': '', 'method': '{}', 'per_sample': '{}'}
     try:
-        validate_data_fn(p['g'], p['s'], evalParams)
-        evalData = evaluate_method_fn(p['g'], p['s'], evalParams)
-        resDict.update(evalData)
+        # validate_data_fn(p['g'], p['s'], eval_params)
+        eval_data = evaluate_method_fn(p['g'], p['s'], eval_params)
+        res_dict.update(eval_data)
 
     except Exception as e:
-        resDict['Message'] = str(e)
-        resDict['calculated'] = False
+        res_dict['Message'] = str(e)
+        res_dict['calculated'] = False
 
     if 'o' in p:
         if not os.path.exists(p['o']):
             os.makedirs(p['o'])
 
-        resultsOutputname = p['o'] + '/results.zip'
-        outZip = zipfile.ZipFile(resultsOutputname, mode='w', allowZip64=True)
+        results_output_name = p['o'] + '/results.zip'
+        out_zip = zipfile.ZipFile(results_output_name, mode='w', allowZip64=True)
 
-        del resDict['per_sample']
-        if 'output_items' in resDict.keys():
-            del resDict['output_items']
+        del res_dict['per_sample']
+        if 'output_items' in res_dict.keys():
+            del res_dict['output_items']
 
-        outZip.writestr('method.json', json.dumps(resDict))
+        out_zip.writestr('method.json', json.dumps(res_dict))
 
-    if not resDict['calculated']:
+    if not res_dict['calculated']:
         if show_result:
-            sys.stderr.write('Error!\n' + resDict['Message'] + '\n\n')
+            sys.stderr.write('Error!\n' + res_dict['Message'] + '\n\n')
         if 'o' in p:
-            outZip.close()
-        return resDict
+            out_zip.close()
+        return res_dict
 
     if 'o' in p:
-        if per_sample == True:
-            for k, v in evalData['per_sample'].iteritems():
-                outZip.writestr(k + '.json', json.dumps(v))
+        if per_sample:
+            for k, v in eval_data['per_sample'].iteritems():
+                out_zip.writestr(k + '.json', json.dumps(v))
 
-            if 'output_items' in evalData.keys():
-                for k, v in evalData['output_items'].iteritems():
-                    outZip.writestr(k, v)
+            if 'output_items' in eval_data.keys():
+                for k, v in eval_data['output_items'].iteritems():
+                    out_zip.writestr(k, v)
 
-        outZip.close()
+        out_zip.close()
 
     if show_result:
         sys.stdout.write("Calculated!")
-        sys.stdout.write(json.dumps(resDict['method']))
+        sys.stdout.write(json.dumps(res_dict['method']))
 
-    return resDict
+    return res_dict
 
 
 def main_validation(default_evaluation_params_fn, validate_data_fn):

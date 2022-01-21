@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import os
 from collections import namedtuple
 import rrc_evaluation_funcs
 import importlib
+import numpy as np
+import Polygon as plg
+import pandas as pd
 
 
-def evaluation_imports():
+def evaluation_impsorts():
     """
     evaluation_imports: Dictionary ( key = module name , value = alias  )  with python modules used in the evaluation. 
     """
@@ -22,8 +26,6 @@ def default_evaluation_params():
     return {
         'IOU_CONSTRAINT': 0.5,
         'AREA_PRECISION_CONSTRAINT': 0.5,
-        'GT_SAMPLE_NAME_2_ID': 'gt_img_([0-9]+).txt',
-        'DET_SAMPLE_NAME_2_ID': 'res_img_([0-9]+).txt',
         'LTRB': False,  # LTRB:2points(left,top,right,bottom) or 4 points(x1,y1,x2,y2,x3,y3,x4,y4)
         'CRLF': False,  # Lines are delimited by Windows CRLF format
         'CONFIDENCES': False,  # Detections must include confidence value. AP will be calculated
@@ -58,12 +60,14 @@ def evaluate_method(gtFilePath, submFilePath, evaluationParams):
     """
     Method evaluate_method: evaluate method and returns the results
         Results. Dictionary with the following values:
-        - method (required)  Global method metrics. Ex: { 'Precision':0.8,'Recall':0.9 }
+        - method
+
+        (required)  Global method metrics. Ex: { 'Precision':0.8,'Recall':0.9 }
         - samples (optional) Per sample metrics. Ex: {'sample1' : { 'Precision':0.8,'Recall':0.9 } , 'sample2' : { 'Precision':0.8,'Recall':0.9 }
     """
 
-    for module, alias in evaluation_imports().iteritems():
-        globals()[alias] = importlib.import_module(module)
+    # for module, alias in evaluation_imports().iteritems():
+    #     globals()[alias] = importlib.import_module(module)
 
     def polygon_from_points(points):
         """
@@ -149,18 +153,25 @@ def evaluate_method(gtFilePath, submFilePath, evaluationParams):
 
     Rectangle = namedtuple('Rectangle', 'xmin ymin xmax ymax')
 
-    gt = rrc_evaluation_funcs.load_zip_file(gtFilePath, evaluationParams['GT_SAMPLE_NAME_2_ID'])
-    subm = rrc_evaluation_funcs.load_zip_file(submFilePath, evaluationParams['DET_SAMPLE_NAME_2_ID'], True)
-
     numGlobalCareGt = 0;
     numGlobalCareDet = 0;
 
     arrGlobalConfidences = [];
     arrGlobalMatches = [];
 
+    gt = os.listdir(gtFilePath)
+    subm = os.listdir(submFilePath)
+
+    print(f'Number of samples in GT: {len(gt)}')
+    print(f'Number of samples in Preds: {len(subm)}')
+
     for resFile in gt:
 
-        gtFile = rrc_evaluation_funcs.decode_utf8(gt[resFile])
+        if not resFile.endswith(".txt"):
+            continue
+
+        print("Evaluating File:", resFile)
+
         recall = 0
         precision = 0
         hmean = 0
@@ -189,15 +200,29 @@ def evaluate_method(gtFilePath, submFilePath, evaluationParams):
 
         evaluationLog = ""
 
-        pointsList, _, transcriptionsList = rrc_evaluation_funcs.get_tl_line_values_from_file_contents(gtFile,
-                                                                                                       evaluationParams[
-                                                                                                           'CRLF'],
-                                                                                                       evaluationParams[
-                                                                                                           'LTRB'],
-                                                                                                       True, False)
+        # Get bounding box coordinates and transcriptions
+        # pointsList, _, transcriptionsList = rrc_evaluation_funcs.get_tl_line_values_from_file_contents(gtFile,
+        #                                                                                                evaluationParams[
+        #                                                                                                    'CRLF'],
+        #                                                                                                evaluationParams[
+        #                                                                                                    'LTRB'],
+        #                                                                                                True, False)
+
+        pointsList, transcriptionsList = [], []
+
+        for row in pd.read_csv(os.path.join(gtFilePath, resFile), header=None, engine='python', keep_default_na=False).iterrows():
+            row = row[1]
+            pointsList.append([
+                int(row[0]), int(row[1]),
+                int(row[2]), int(row[3]),
+                int(row[4]), int(row[5]),
+                int(row[6]), int(row[7])])
+            transcriptionsList.append(row[8])
+
         for n in range(len(pointsList)):
             points = pointsList[n]
             transcription = transcriptionsList[n]
+            # print("Points:", points, transcription)
             dontCare = transcription == "###"
             if evaluationParams['LTRB']:
                 gtRect = Rectangle(*points)
@@ -214,26 +239,16 @@ def evaluate_method(gtFilePath, submFilePath, evaluationParams):
 
         if resFile in subm:
 
-            detFile = rrc_evaluation_funcs.decode_utf8(subm[resFile])
+            pointsList = []
 
-            def get_pred(file):
-                lines = file.split('\n')
-                pointsList = []
-                for line in lines:
-                    if line == '':
-                        continue
-                    bbox = line.split(',')
-                    if len(bbox) % 2 == 1:
-                        print(path)
-                    bbox = [int(x) for x in bbox]
-                    pointsList.append(bbox)
-                return pointsList
+            for row in pd.read_csv(os.path.join(submFilePath, resFile), header=None, engine='python', keep_default_na=False).iterrows():
+                row = row[1]
+                pointsList.append([
+                    int(row[0]), int(row[1]),
+                    int(row[2]), int(row[3]),
+                    int(row[4]), int(row[5]),
+                    int(row[6]), int(row[7])])
 
-            # pointsList,confidencesList,_ = rrc_evaluation_funcs.get_tl_line_values_from_file_contents(detFile,evaluationParams['CRLF'],evaluationParams['LTRB'],False,evaluationParams['CONFIDENCES'])
-            # print(pointsList)
-            # print(confidencesList)
-
-            pointsList = get_pred(detFile)
             confidencesList = [0.0] * len(pointsList)
 
             for n in range(len(pointsList)):
@@ -294,6 +309,8 @@ def evaluate_method(gtFilePath, submFilePath, evaluationParams):
 
                         arrGlobalConfidences.append(confidencesList[detNum]);
                         arrGlobalMatches.append(match);
+        else:
+            print(f'{resFile} not in preds!')
 
         numGtCare = (len(gtPols) - len(gtDontCarePolsNum))
         numDetCare = (len(detPols) - len(detDontCarePolsNum))
